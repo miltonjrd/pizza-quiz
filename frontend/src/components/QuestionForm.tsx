@@ -1,13 +1,18 @@
 // dependencies
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { NextPage } from "next";
 import styled from "styled-components";
+import { api } from "../api";
 
 // types
 import type { FormEvent } from "react";
 
 // interfaces
 import Question from "../interfaces/Question";
-import next from "next";
+import Answer from "../interfaces/Answer";
+
+// context
+import GlobalInfoContext from "../context/GlobalInfoContext";
 
 const Form = styled.form`
   width: 800px;
@@ -35,26 +40,26 @@ const Alternative = styled.label`
   }
 `;
 
-interface Props extends Question{
+interface Props extends Question {
   questionNumber: number,
-  next: (alternativeId: number) => void,
+  saveAnswer: (chosenAlternativeId: number) => void,
+  next: () => void, 
   previous: () => void
 };
 
-const QuestionForm = ({ id, phrase, alternatives, questionNumber, next, previous }: Props) => {
+const QuestionForm: NextPage<Props> = ({ id, phrase, alternatives, questionNumber, next, previous, saveAnswer }) => {
   const [alternative, setAlternative] = useState<number>(0);
   const [canSubmit, setCanSubmit] = useState(false);
 
   const handleSubmit = (evt: FormEvent) => {
     evt.preventDefault();
-    
-    setCanSubmit(false);
-    next(alternative);
+    saveAnswer(alternative);
+    next();
   };
 
   const handleBackwardBtn = () => {
-    setCanSubmit(false);
-    previous();
+    //setCanSubmit(false);
+    //previous();
   };
 
   return (
@@ -82,6 +87,7 @@ const QuestionForm = ({ id, phrase, alternatives, questionNumber, next, previous
         <button 
           className="btn btn-danger fw-bold px-5"
           type="button"
+          onClick={handleBackwardBtn}
         >
           Voltar
         </button>

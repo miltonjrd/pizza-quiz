@@ -7,17 +7,16 @@ const routes = Router();
 const prisma = new PrismaClient();
 
 routes.get('/questions', async (req: Request, res: Response) => {
-  /*const questions = await prisma.question.findMany({
+  const questions = await prisma.question.findMany({
     include: {
       alternatives: {
         select: {
+          id: true,
           phrase: true
         }
       },
     },
-  });*/
-
-  const questions = await prisma.question.count();
+  });
 
   res.json(questions);
 });
@@ -25,7 +24,7 @@ routes.get('/questions', async (req: Request, res: Response) => {
 routes.get('/ranking', async (req: Request, res: Response) => {
   const ranking = await prisma.ranking.findMany({
     orderBy: {
-      time: 'asc'
+      score: 'desc'
     }
   });
 
@@ -33,8 +32,8 @@ routes.get('/ranking', async (req: Request, res: Response) => {
 });
 
 routes.post('/ranking', async (req: Request, res: Response) => {
-  const answers = req.answers?.map((answer: Answer) => answer.question)
-  const correctAlternatives =  await prisma.alternative.findMany({
+  const answers: number[] = req.body.answers?.map((answer: Answer) => answer.alternative);
+  const correctAlternatives: number = await prisma.alternative.count({
     where: {
       id: {
         in: answers 
@@ -43,12 +42,15 @@ routes.post('/ranking', async (req: Request, res: Response) => {
     }
   });
 
-  /*await prisma.ranking.create({
+  await prisma.ranking.create({
     data: {
-      username: req.username as string,
-      score: correctAlternatives.length
+      username: req.body.username,
+      score: correctAlternatives,
+      time: req.body.time
     }
-  });*/
+  });
+
+  res.status(200).json();
 });
 
 export default routes;

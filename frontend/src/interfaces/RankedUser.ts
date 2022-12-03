@@ -1,6 +1,6 @@
 export default interface RankedUser {
   id: number,
   username: string,
-  correct: number,
+  score: number,
   time: string
 };

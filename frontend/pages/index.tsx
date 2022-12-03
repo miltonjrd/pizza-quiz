@@ -1,8 +1,9 @@
 // dependencies
 import { useEffect, useState, useContext } from 'react';
+import { NextPage } from 'next';
 import GlobalInfoContext, { GlobalInfoContextInterface } from '../src/context/GlobalInfoContext';
 import GlobalInfo from '../src/interfaces/GlobalInfo';
-import { api } from '../src/api';
+import { api, useApi } from '../src/api';
 import styled from 'styled-components';
 
 // types
@@ -14,8 +15,11 @@ import RankedUser from '../src/interfaces/RankedUser';
 import Answer from '../src/interfaces/Answer';
 
 // components
+import AuthForm from '../src/components/AuthForm';
 import QuestionForm from '../src/components/QuestionForm';
 import Ranking from '../src/components/Ranking';
+import Popups from '../src/components/Popups';
+import Timer from '../src/components/Timer';
 
 const Wrapper = styled.div`
   display: flex;
@@ -32,89 +36,81 @@ const Container = styled.div`
   border-radius: .5rem;
 `;
 
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  width: 400px;
-`;
+interface Props {
+  questions: Question[]
+}
 
-const Input = styled.input`
-  background: #fff;
-  width: 100%;
-  border: 1px solid #dee2e6;
-  box-shadow: inset 0 -.25rem #dee2e6;
-  border-radius: .25rem;
-  padding: .5rem;
-`;
-
-const Home = ({ questions }: { questions: Array<Question> }) => {
-  const [form, setForm] = useState<{ name?: string}>({
-    name: ''
-  });
-  const [time, setTime] = useState<number>(0);
+const Home: NextPage<Props> = ({ questions }) => {
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number>(1);
   const [answers, setAnswers] = useState<Array<Answer>>([]);
+  const [doSaveTime, setDoSaveTime] = useState<boolean>(false);
 
   const { context: globalInfoContext, setContext: setGlobalInfoContext }: GlobalInfoContextInterface = useContext(GlobalInfoContext);
 
-  const handleControlledInput = (evt: ChangeEvent<HTMLInputElement>) => {
-    setForm({ [evt.target.name]: evt.target.value });
-  };
-
-  const handleNameSubmit = (evt: FormEvent) => {
-    evt.preventDefault();
-
-    /*const interval = setInterval(() => {
-      setTime(state => state+1);
-    }, 1000);*/
-
-    setGlobalInfoContext((state: GlobalInfo): GlobalInfo => ({ 
-      ...state, 
-      user: { 
-        name: form.name! 
-      }
-    }));
-    setForm({ name: '' });
-    
-  };
+  const { data: rankingData, isLoading, mutate: rankingMutate } = useApi<Array<RankedUser>>('/ranking');
 
   const filteredQuestions = questions.filter(({ id }) => answers.filter(ans => ans.question === id).length === 0);
-  console.log(answers)
+
+  useEffect(() => {
+    // salva o usuario no ranking caso as perguntas tenham acabado
+    if (!filteredQuestions.length) {
+      setDoSaveTime(true);
+      userRank();
+    }
+  }, [answers]);
+
+  const userRank = async () => {
+    try {
+      const { data } = await api.post('ranking', {
+        username: globalInfoContext?.user?.name,
+        answers,
+        time: globalInfoContext?.time
+      });
+
+      // atualiza o ranking
+      rankingMutate();
+    } catch (err) {
+      console.log(err)
+    }
+  };
+
 
   return (
     <Wrapper>
+      <Popups />
       <Container >
         {
+          globalInfoContext?.user?.name && filteredQuestions.length &&
+          <Timer />
+        }
+        {
           !globalInfoContext?.user?.name ?
-          <Form className="text-center" onSubmit={handleNameSubmit}>
-            <h3>Pizza Quiz</h3>
-            <p style={{ lineHeight: 1.2 }}>O que você sabe sobre pizza?<br />Teste o seu conhecimento com este quiz!</p>
-            <Input name="name" placeholder='Seu nome' className="mt-4" value={form.name} onChange={handleControlledInput} autoComplete="off" />
-            <button className="btn btn-primary w-50 align-self-center mt-3" type="submit">Jogar</button>
-          </Form> :
+          <AuthForm /> :
           filteredQuestions.length ?
           filteredQuestions.map((question) => (
             <QuestionForm 
               key={question.id}
               questionNumber={currentQuestionNumber}
-              next={(alternativeId) => {
-                setAnswers(state => [...state, { question: question.id, alternative: alternativeId }]);
+              saveAnswer={(chosenAlternativeId: number) => {
+                setAnswers(state => [...state, { question: question.id, alternative: chosenAlternativeId }]);
+              }}
+              next={() => {
                 setCurrentQuestionNumber(state => state+1);
               }}
               previous={() => {
                 setAnswers(state => state.filter((ans => ans.question !== question.id)));
-                setCurrentQuestionNumber(state => state+1);
+                setCurrentQuestionNumber(state => state-1);
               }}
               {...question}
             />
           ))
           [Math.floor(Math.random()*(filteredQuestions.length))] :
           <Ranking 
-            answers={answers}
+            data={rankingData}
             reset={() => {
               setCurrentQuestionNumber(1);
               setAnswers([]);
-              setGlobalInfoContext((state) => ({ ...state, user: { name: '' } }));
+              setGlobalInfoContext((state: GlobalInfo) => ({ ...state, user: { name: '' } }));
             }}
           />
           
@@ -128,9 +124,28 @@ const Home = ({ questions }: { questions: Array<Question> }) => {
 export const getStaticProps = async () => {
   const { data: questions } = await api.get('/questions');
 
+  function shuffle(array: any[]) {
+    let m = array.length, t, i;
+  
+    // While there remain elements to shuffle…
+    while (m) {
+  
+      // Pick a remaining element…
+      i = Math.floor(Math.random() * m--);
+  
+      // And swap it with the current element.
+      t = array[m];
+      array[m] = array[i];
+      array[i] = t;
+    }
+  
+    return array;
+  }
+
+  // mistura as alternativas antes de mandar pra props
   return {
     props: {
-      questions
+      questions: questions.map((question: Question) => ({ ...question, alternatives: shuffle(question.alternatives) }))
     }
   };
 };
